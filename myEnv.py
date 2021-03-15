@@ -1,6 +1,7 @@
 # import the base environment class
 from flow.envs import Env
 from gym.spaces.box import Box
+import numpy as np
 
 ADDITIONAL_ENV_PARAMS = {
     "max_accel": 1,
@@ -22,19 +23,51 @@ class myEnv(myEnv):
         return Box(low=accel_lb,
                    high=accel_ub,
                    shape=(num_actions,))
-    
-class myEnv(myEnv):  # update my environment class
-
+   
     @property
     def observation_space(self):
+        print("Shape should be:", 3*self.initial_vehicles.num_vehicles)
+        print("Shape should be:", 3*self.initial_vehicles.num_vehicles)
+        print("Shape should be:", 3*self.initial_vehicles.num_vehicles)
+        
         return Box(
             low=(float("inf")*-1),
             high=float("inf"),
-            shape=(2*self.initial_vehicles.num_vehicles,),
+            shape=(3*self.initial_vehicles.num_vehicles,),
         )
     
-class myEnv(myEnv):  # update my environment class
+    def get_distance_to_intersection(self, veh_ids):
+        """Determine the distance from a vehicle to its next intersection.
+        Parameters
+        ----------
+        veh_ids : str or str list
+            vehicle(s) identifier(s)
+        Returns
+        -------
+        float (or float list)
+            distance to closest intersection
+        """
+        if isinstance(veh_ids, list):
+            return [self.get_distance_to_intersection(veh_id)
+                    for veh_id in veh_ids]
+        return self.find_intersection_dist(veh_ids)
 
+    def find_intersection_dist(self, veh_id):
+        """Return distance from intersection.
+        Return the distance from the vehicle's current position to the position
+        of the node it is heading toward.
+        """
+        edge_id = self.k.vehicle.get_edge(veh_id)
+        # FIXME this might not be the best way of handling this
+        if edge_id == "":
+            return -10
+        if 'center' in edge_id:
+            return 0
+        edge_len = self.k.network.edge_length(edge_id)
+        relative_pos = self.k.vehicle.get_position(veh_id)
+        dist = edge_len - relative_pos
+        return dist
+    
     def _apply_rl_actions(self, rl_actions):
         
 #         print("rl actions", rl_actions)
@@ -46,50 +79,54 @@ class myEnv(myEnv):  # update my environment class
 
         # use the base environment method to convert actions into accelerations for the rl vehicles
         self.k.vehicle.apply_acceleration(rl_ids, rl_actions)
+    
+    def _convert_edge(self, edge):
+        _dict = {"exit_edge1" : 5,"enter_edge2" : 2,"enter_edge3" : 3,"exit_edge4" : 8,"enter_edge1":1,"exit_edge2" : 6,"exit_edge3" : 7, "enter_edge4" : 4}
         
-import numpy as np
-
-class myEnv(myEnv):  # update my environment class
-
+        convertedEdge = _dict[edge] - 1
+        
+        return convertedEdge
+        
+    
     def get_state(self, **kwargs):
-        # the get_ids() method is used to get the names of all vehicles in the network
-        ids = self.k.vehicle.get_ids()
+        max_dist = 200
+        num_edges = 8
         
-#         print("Getting State")
-        
-#         print("ids", ids)
-
-#         print("Num IDs", len(ids))
-
-        # we use the get_absolute_position method to get the positions of all vehicles
-        pos = [self.k.vehicle.get_x_by_id(veh_id) for veh_id in ids]
-        
-        while len(pos) != 32:
-            pos.append(0)
-        
-#         print("pos", pos)
-
-        # we use the get_speed method to get the velocities of all vehicles
-        vel = [self.k.vehicle.get_speed(veh_id) for veh_id in ids]
-        
-        while len(vel) != 32:
-            vel.append(0)
+        speeds = [
+            self.k.vehicle.get_speed(veh_id) / self.k.network.max_speed()
+            for veh_id in self.k.vehicle.get_ids()
+        ]
+        dist_to_intersec = [
+            self.get_distance_to_intersection(veh_id) / max_dist
+            for veh_id in self.k.vehicle.get_ids()
+        ]
+        edges = [
+            self._convert_edge(self.k.vehicle.get_edge(veh_id)) /
+            (num_edges - 1)
+            for veh_id in self.k.vehicle.get_ids()
+        ]
+        while len(speeds) != 32:
+            speeds.append(0)
             
-#         print("vel", vel)
-
-        # the speeds and positions are concatenated to produce the state
-        result = np.concatenate((pos, vel))
-#         print("Result Shape", result.shape)
-
-#         print("Max value in observation", np.max(result))
-#         print("Min value in observation", np.min(result))
+        while len(dist_to_intersec) != 32:
+            dist_to_intersec.append(1)
+            
+        while len(edges) != 32:
+            edges.append(-1)
+            
+        result = []
+        
+        resultLst = [speeds, dist_to_intersec, edges]
+        
+        for r in resultLst:
+            result += r
+            
+        result = np.array(result)
+        
+        print("EEEEEEEEEEEEEE", result.shape)
         
         return result
     
-import numpy as np
-
-class myEnv(myEnv):  # update my environment class
-
     def compute_reward(self, rl_actions, **kwargs):
         
 #       print("Compute Reward")
@@ -104,9 +141,9 @@ class myEnv(myEnv):  # update my environment class
         
         result = np.mean(speeds)
         
-#         print("Average Speed#@#@#@#@#@#@#@#@#@#@#@", result)
+        print("Average Speed#@#@#@#@#@#@#@#@#@#@#@", result)
         
-#         print("Maximum Speed#@#@#@#@#@#@#@#@#@#@#@", np.max(speeds))
+        print("Maximum Speed#@#@#@#@#@#@#@#@#@#@#@", np.max(speeds))
         
         return result
     
@@ -125,7 +162,7 @@ class myEnv(myEnv):  # update my environment class
             if (self._reroute_if_final_edge(veh_id)):
                 count += 1
                 
-#         print("Count &*&*&*&*&*&*&*&*&*&*&*&*&*&", count)
+        print("Count &*&*&*&*&*&*&*&*&*&*&*&*&*&", count)
             
 #         print("Vehicles IDs", self.k.vehicle.get_ids())
             
