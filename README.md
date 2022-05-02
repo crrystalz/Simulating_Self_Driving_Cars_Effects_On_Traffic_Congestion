@@ -5,3 +5,5 @@ Advanced self-driving cars can positively impact traffic congestion, utilizing V
 Full Paper: https://docs.google.com/document/d/1a38zuSQPzi6iUrLNyvEl7Euqs0KEUTslLZ-F36IYAOk/edit#
 
 The main script RespawnTest.py, is the code that defines the road network which the cars simulate one, as well as the code and paramteres which start the experiment.
+
+![SUMO Simulation Image](https://i.imgur.com/gaEHmMp.jpg)
